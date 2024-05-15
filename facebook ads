@@ -1,0 +1,18 @@
+select 
+ ad_date,
+ campaign_id,
+ sum(spend) as total_spend,
+ sum(impressions) as total_impressions,
+ sum(clicks) as total_clicks,
+ sum(value) as total_value,
+ round(sum(spend::numeric)/nullif (sum (clicks),0),2)as "CPC",
+ round(sum(spend::numeric)/nullif (sum(impressions),0)*1000,2) as "CPM",
+ round (sum(clicks::numeric)/nullif (sum(impressions),0)*100,2) as "CTR",
+ round((sum(value::numeric)-sum(spend))/nullif (sum(spend),0)*100,2) as "ROMI"
+ from 
+ facebook_ads_basic_daily fabd
+ group by
+ campaign_id,
+ ad_date 
+ order by 
+ ad_date asc;
