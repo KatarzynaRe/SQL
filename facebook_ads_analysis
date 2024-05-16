@@ -1,0 +1,91 @@
+with tb1 as(
+select 
+date_trunc('month',fabd.ad_date)as ad_month,
+fabd.url_parameters,
+fc.campaign_name,
+coalesce (fabd.spend ,0)spend,
+coalesce (fabd.impressions,0) impressions ,
+coalesce(fabd.reach ,0)reach,
+coalesce (fabd.clicks,0) clicks,
+coalesce (fabd.leads,0)leads  ,
+coalesce (fabd.value,0)value
+from 
+facebook_ads_basic_daily fabd
+left join 
+facebook_campaign fc using (campaign_id)
+union all
+select
+date_trunc('month',gabd.ad_date)as ad_month,
+gabd.url_parameters ,
+gabd.campaign_name,
+coalesce (gabd.spend,0),
+coalesce(gabd.impressions,0),
+coalesce(gabd.reach,0),
+coalesce(gabd.clicks,0),
+coalesce(gabd.leads,0),
+coalesce(gabd.value,0)
+from
+google_ads_basic_daily gabd
+),
+tb2 as (
+select
+tb1.ad_month,
+case
+when substring(url_parameters,'utm_campaign=([^&$]+)')='nan' 
+then null
+else lower (substring(url_parameters,'utm_campaign=([^&$]+)'))
+end utm_campaign,
+sum(spend)as total_spend,
+sum (impressions) as total_impressions,
+sum (clicks) as total_clicks,
+sum (value)as total_value,
+case
+	when sum(clicks)=0
+	then 0
+	else round (sum(spend::numeric)/sum(clicks),2)
+	end cpc,
+	case
+	when sum(impressions)=0
+	then 0
+	else round(sum(spend::numeric)/sum(impressions)*1000,2)
+	end cpm,
+	case
+	when sum(clicks)=0
+	then 0
+	else round(sum(impressions::numeric)/sum(clicks)*100,2)
+	end ctr,
+	case
+	when sum(spend)=0
+	then 0
+	else round((sum(value:: numeric)-sum( spend))/sum(spend)*100,2)
+	end romi
+	from tb1
+	group by
+	ad_month,
+	utm_campaign
+	)
+	select
+	ad_month,
+	utm_campaign,
+	total_spend,
+	total_impressions,
+	total_clicks,
+	total_value,
+	ctr,
+	round(ctr/nullif(lag(ctr,1)over(
+	partition by utm_campaign
+	order by ad_month),0),2) as ctr_diff,
+	cpc,
+	round (cpc/nullif(lag(cpc,1)over (
+	partition by utm_campaign
+	order by ad_month),0),2) as cpc_diff,
+	cpm,
+	round(cpm/nullif(lag(cpm,1)over (
+	partition by utm_campaign
+	order by ad_month),0),2) as cpm_diff,
+	romi,
+	round(romi/nullif(lag(romi,1) over(
+	partition by utm_campaign
+	order by ad_month),0),2) as romi_diff
+	from
+	tb2;
